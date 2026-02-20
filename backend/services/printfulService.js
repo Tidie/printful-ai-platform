@@ -86,23 +86,56 @@ class PrintfulService {
               placement: placement.placement,
               label: this._formatPlacementLabel(placement.placement),
               techniques: [],
-              constraints: {
-                width: placement.width,
-                height: placement.height,
-                unit: 'inches',
-              },
+              constraints: { width: placement.width, height: placement.height, unit: 'inches' },
             };
           }
           areas[placement.placement].techniques.push({
-            id: technique.technique,
+            id: technique.key || technique.technique,
             name: technique.display_name,
-            colors: technique.colors, // pour l'embroidery, nombre de couleurs limité
+            colors: technique.colors,
           });
         });
       }
     });
 
+    // Si rien trouvé → zones par défaut selon le type de produit
+    if (Object.keys(areas).length === 0) {
+      const defaultAreas = this._getDefaultAreas(product.type, techniques);
+      defaultAreas.forEach(area => { areas[area.placement] = area; });
+    }
+
     return Object.values(areas);
+  }
+
+  _getDefaultAreas(productType, techniques) {
+    const techName = techniques?.[0]?.display_name || 'Impression';
+    const techId = techniques?.[0]?.key || 'dtg';
+    const defaultTech = [{ id: techId, name: techName }];
+
+    const typeMap = {
+      'T-SHIRT':    [
+        { placement: 'front', label: 'Devant', techniques: defaultTech, constraints: { width: 12, height: 16 } },
+        { placement: 'back',  label: 'Dos',    techniques: defaultTech, constraints: { width: 12, height: 16 } },
+      ],
+      'HOODIE':     [
+        { placement: 'front', label: 'Devant', techniques: defaultTech, constraints: { width: 12, height: 16 } },
+        { placement: 'back',  label: 'Dos',    techniques: defaultTech, constraints: { width: 12, height: 16 } },
+      ],
+      'SWEATSHIRT': [
+        { placement: 'front', label: 'Devant', techniques: defaultTech, constraints: { width: 12, height: 16 } },
+        { placement: 'back',  label: 'Dos',    techniques: defaultTech, constraints: { width: 12, height: 16 } },
+      ],
+      'DECOR':  [{ placement: 'front', label: 'Surface',    techniques: defaultTech, constraints: { width: 12, height: 12 } }],
+      'MUG':    [{ placement: 'front', label: 'Face',       techniques: defaultTech, constraints: { width: 8,  height: 4  } }],
+      'POSTER': [{ placement: 'front', label: 'Surface',    techniques: defaultTech, constraints: { width: 18, height: 24 } }],
+      'HAT':    [{ placement: 'front', label: 'Devant',     techniques: defaultTech, constraints: { width: 6,  height: 4  } }],
+      'BAG':    [{ placement: 'front', label: 'Face avant', techniques: defaultTech, constraints: { width: 12, height: 12 } }],
+      'PHONE_CASE': [{ placement: 'front', label: 'Face',  techniques: defaultTech, constraints: { width: 4,  height: 7  } }],
+    };
+
+    return typeMap[productType] || [
+      { placement: 'front', label: 'Devant', techniques: defaultTech, constraints: { width: 12, height: 16 } },
+    ];
   }
 
   _formatPlacementLabel(placement) {
