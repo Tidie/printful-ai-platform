@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useProductCatalog } from '../hooks/index';
+import { useProductCatalog } from '../hooks';
 
 interface Props {
   onSelect: (product: any, variant: any) => void;

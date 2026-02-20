@@ -165,7 +165,7 @@ export function CustomizationStudio({ product, variant, onComplete, onBack }: Pr
   const handleScaleAll = (factor: number) => {
     const canvas = fabricRef.current;
     if (!canvas) return;
-    canvas.getObjects().forEach(obj => {
+      canvas.getObjects().forEach((obj: any) => {
       if (obj.type !== 'rect') { // ne pas scaler le guide
         obj.scale((obj.scaleX || 1) * factor);
       }
