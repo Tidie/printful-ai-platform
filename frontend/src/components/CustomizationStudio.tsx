@@ -13,7 +13,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { fabric } from 'fabric';
 import { PrintZoneManager } from './PrintZoneManager';
 import { AIPromptPanel } from './AIPromptPanel';
-import { useMockupGenerator } from '../hooks/useMockupGenerator';
+import { useMockupGenerator } from '../hooks/index.ts';
 
 interface Props {
   product: any;
