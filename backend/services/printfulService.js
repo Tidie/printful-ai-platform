@@ -47,23 +47,35 @@ class PrintfulService {
     const params = new URLSearchParams({ limit, offset });
     if (category) params.append('category_id', category);
 
-    const data = await this.request(`/catalog/products?${params}`);
-    return {
-      products: data.result,
-      paging: data.paging,
-    };
+    const data = await this.request(`/products?${params}`);
+    const products = Array.isArray(data.result) ? data.result : Object.values(data.result || {});
+    return { products, paging: data.paging };
   }
 
   async getProductDetails(productId) {
-    const [product, variants] = await Promise.all([
-      this.request(`/catalog/products/${productId}`),
-      this.request(`/catalog/variants?product_id=${productId}`),
-    ]);
+    // Essaie d'abord /products/:id, sinon /catalog/products/:id
+    let productData, variantList;
 
-    const productData = product.result;
-    const variantList = Array.isArray(variants.result)
-      ? variants.result
-      : Object.values(variants.result || {});
+    try {
+      const [product, variants] = await Promise.all([
+        this.request(`/products/${productId}`),
+        this.request(`/products/${productId}/variants`),
+      ]);
+      productData = product.result;
+      variantList = Array.isArray(variants.result)
+        ? variants.result
+        : Object.values(variants.result || {});
+    } catch (e) {
+      // Fallback catalog endpoint
+      const [product, variants] = await Promise.all([
+        this.request(`/catalog/products/${productId}`),
+        this.request(`/catalog/variants?product_id=${productId}`),
+      ]);
+      productData = product.result;
+      variantList = Array.isArray(variants.result)
+        ? variants.result
+        : Object.values(variants.result || {});
+    }
 
     return {
       product: productData,
