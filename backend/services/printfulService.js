@@ -47,27 +47,28 @@ class PrintfulService {
     const params = new URLSearchParams({ limit, offset });
     if (category) params.append('category_id', category);
 
-    const data = await this.request(`/products?${params}`);
+    const data = await this.request(`/catalog/products?${params}`);
     return {
       products: data.result,
       paging: data.paging,
     };
   }
 
-  /**
-   * Détails d'un produit : variantes, tailles, couleurs, techniques d'impression
-   * C'est ici qu'on récupère les print_areas et techniques (DTG, broderie, etc.)
-   */
   async getProductDetails(productId) {
     const [product, variants] = await Promise.all([
-      this.request(`/products/${productId}`),
-      this.request(`/products/${productId}/variants`),
+      this.request(`/catalog/products/${productId}`),
+      this.request(`/catalog/variants?product_id=${productId}`),
     ]);
 
+    const productData = product.result;
+    const variantList = Array.isArray(variants.result)
+      ? variants.result
+      : Object.values(variants.result || {});
+
     return {
-      product: product.result,
-      variants: variants.result,
-      printAreas: this._extractPrintAreas(product.result),
+      product: productData,
+      variants: variantList,
+      printAreas: this._extractPrintAreas(productData),
     };
   }
 
