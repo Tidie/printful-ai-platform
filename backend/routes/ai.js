@@ -25,6 +25,7 @@ aiRouter.post('/generate', aiLimiter, async (req, res, next) => {
       aspectRatio    = '1:1',
       printPlacement = 'front',
       refImages      = [],
+      model          = 'gemini-2.5-flash-image',
     } = req.body;
 
     const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -40,8 +41,7 @@ aiRouter.post('/generate', aiLimiter, async (req, res, next) => {
 
     const enrichedPrompt = buildPrompt(prompt, style, printPlacement, negativePrompt, refImages.length > 0);
 
-    console.log(`🎨 Gemini 2.0 Flash — style: ${style}, refs: ${refImages.length}`);
-    console.log(`   Prompt: ${enrichedPrompt.substring(0, 120)}…`);
+    console.log(`   Style: ${style}, refs: ${refImages.length}, prompt: ${enrichedPrompt.substring(0, 80)}…`);
 
     // Parts multimodaux : photos de référence d'abord, puis le texte
     const parts = [];
@@ -51,8 +51,13 @@ aiRouter.post('/generate', aiLimiter, async (req, res, next) => {
     }
     parts.push({ text: enrichedPrompt });
 
-    // Appel Gemini 2.0 Flash — modèle public avec clé Google AI Studio
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`;
+    // Modèle sélectionné par l'utilisateur (flash ou pro 4K)
+    const ALLOWED_MODELS = ['gemini-2.5-flash-image', 'gemini-3-pro-image-preview'];
+    const safeModel = ALLOWED_MODELS.includes(model) ? model : 'gemini-2.5-flash-image';
+    const isPro = safeModel === 'gemini-3-pro-image-preview';
+
+    console.log(`🎨 Modèle : ${safeModel}${isPro ? ' (Pro 4K, ~20s)' : ' (Flash, ~3s)'}`);
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${safeModel}:generateContent?key=${GEMINI_API_KEY}`;
 
     const geminiRes = await fetch(url, {
       method: 'POST',
@@ -116,7 +121,7 @@ aiRouter.post('/generate', aiLimiter, async (req, res, next) => {
       hdUrl: `data:${imageMime};base64,${imageBase64}`,
       style,
       aspectRatio,
-      model: 'gemini-2.0-flash-exp',
+      model: safeModel,
     });
 
   } catch (err) {

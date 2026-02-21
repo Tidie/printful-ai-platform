@@ -13,8 +13,29 @@ interface RefImage {
   mimeType: string;
 }
 
+const AI_MODELS = [
+  {
+    id: 'gemini-2.5-flash-image',
+    label: 'Flash',
+    sublabel: 'Rapide · ~3s',
+    desc: 'Idéal pour tester et itérer rapidement',
+    badge: '500/j gratuit',
+    badgeColor: '#00FF87',
+    icon: '⚡',
+  },
+  {
+    id: 'gemini-3-pro-image-preview',
+    label: 'Pro · 4K',
+    sublabel: 'Qualité max · ~20s',
+    desc: 'Réflexion avancée, composition premium, 4K',
+    badge: 'BETA',
+    badgeColor: '#FF5C00',
+    icon: '✦',
+  },
+];
+
 interface Props {
-  onGenerate: (prompt: string, style: string, negativePrompt: string, aspectRatio: string, refImages: RefImage[]) => void;
+  onGenerate: (prompt: string, style: string, negativePrompt: string, aspectRatio: string, refImages: RefImage[], model: string) => void;
   loading: boolean;
   error: string | null;
   activePlacement: string;
@@ -64,6 +85,7 @@ export function AIPromptPanel({ onGenerate, loading, error, activePlacement, pla
   const [negativePrompt, setNegativePrompt] = useState('');
   const [aspectRatio, setAspectRatio] = useState('1:1');
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash-image');
   const [refImages, setRefImages] = useState<RefImage[]>([]);
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -107,7 +129,7 @@ export function AIPromptPanel({ onGenerate, loading, error, activePlacement, pla
 
   const handleSubmit = () => {
     if (!prompt.trim() || loading) return;
-    onGenerate(prompt.trim(), style, negativePrompt, aspectRatio, refImages);
+    onGenerate(prompt.trim(), style, negativePrompt, aspectRatio, refImages, selectedModel);
   };
 
   return (
@@ -275,6 +297,33 @@ export function AIPromptPanel({ onGenerate, loading, error, activePlacement, pla
         </div>
       )}
 
+      {/* ── MODEL SELECTOR ── */}
+      <div className="model-selector">
+        <span className="section-label">Moteur IA</span>
+        <div className="model-cards">
+          {AI_MODELS.map(m => (
+            <button
+              key={m.id}
+              className={`model-card ${selectedModel === m.id ? 'model-card--active' : ''}`}
+              onClick={() => setSelectedModel(m.id)}
+              disabled={loading}
+            >
+              <div className="model-card__header">
+                <span className="model-card__icon">{m.icon}</span>
+                <div className="model-card__titles">
+                  <span className="model-card__label">{m.label}</span>
+                  <span className="model-card__sublabel">{m.sublabel}</span>
+                </div>
+                <span className="model-card__badge" style={{ background: m.badgeColor }}>
+                  {m.badge}
+                </span>
+              </div>
+              <p className="model-card__desc">{m.desc}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* ── GENERATE ── */}
       <div className="btn-generate-wrap">
         <button
@@ -291,7 +340,7 @@ export function AIPromptPanel({ onGenerate, loading, error, activePlacement, pla
       </div>
 
       <p className="ai-disclaimer">
-        Généré avec Gemini 2.0 Flash · Droits d'usage commercial inclus
+        {selectedModel === 'gemini-3-pro-image-preview' ? 'Gemini 3 Pro Image · 4K · ~20s' : 'Gemini 2.5 Flash Image · 500/jour gratuit'} · Usage commercial inclus
       </p>
     </div>
   );
