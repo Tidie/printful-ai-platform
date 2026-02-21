@@ -4,6 +4,7 @@
  */
 
 const PRINTFUL_BASE_URL = 'https://api.printful.com';
+const PRINTFUL_V2_URL = 'https://api.printful.com/v2';
 
 class PrintfulService {
   constructor(apiKey) {
@@ -35,6 +36,20 @@ class PrintfulService {
   async verifyConnection() {
     const data = await this.request('/store');
     return data.result;
+  }
+
+
+  async requestV2(endpoint, options = {}) {
+    const url = `${PRINTFUL_V2_URL}${endpoint}`;
+    const res = await fetch(url, {
+      ...options,
+      headers: { ...this.headers, ...options.headers },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || err.title || `HTTP ${res.status}`);
+    }
+    return res.json();
   }
 
   // ─── Catalogue Produits ───────────────────────────────────────────────────
@@ -72,19 +87,22 @@ class PrintfulService {
       preview_url: v.preview_url || null,
     }));
 
-    // Fetch les images du produit (différents angles)
+    // Fetch les images blank par placement via API v2
     let placementImages = {};
     try {
-      const imgData = await this.request(`/products/${productId}/images`);
+      const imgData = await this.requestV2(`/catalog-products/${productId}/images`);
       const images = Array.isArray(imgData.result) ? imgData.result : [];
-      // Map placement → url d'image
+      // Ces images sont des PNG transparents à superposer sur la couleur du variant
+      // On mappe placement → { url, background_color_required }
       images.forEach(img => {
-        if (img.placement && img.url && !placementImages[img.placement]) {
-          placementImages[img.placement] = img.url;
+        if (img.placement && img.url) {
+          if (!placementImages[img.placement]) {
+            placementImages[img.placement] = img.url;
+          }
         }
       });
     } catch(e) {
-      // Pas critique si les images supplémentaires ne sont pas dispo
+      console.warn('Blank images fetch failed:', e.message);
     }
 
     return {
