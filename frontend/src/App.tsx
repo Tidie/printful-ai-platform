@@ -3,6 +3,7 @@ import { LandingPage } from './components/LandingPage';
 import { ProductCatalog } from './components/ProductCatalog';
 import { CustomizationStudio } from './components/CustomizationStudio';
 import { CheckoutFlow } from './components/CheckoutFlow';
+import './index.css';
 
 type Step = 'landing' | 'catalog' | 'studio' | 'checkout';
 
@@ -31,7 +32,6 @@ export default function App() {
 
   return (
     <div className="app noise">
-      {/* NAV — frosted glass, black border, inspired by ai_creation_studio.html */}
       <nav className="app-nav">
         <div className="app-nav__inner">
           <button className="lp-logo" onClick={() => setStep('landing')}>
@@ -41,7 +41,7 @@ export default function App() {
 
           <div className="app-steps">
             {(['catalog', 'studio', 'checkout'] as Step[]).map((s, i) => {
-              const labels = { catalog: 'Produit', studio: 'Design', checkout: 'Commande' };
+              const labels: Record<string, string> = { catalog: 'Produit', studio: 'Design', checkout: 'Commande' };
               const isActive = step === s;
               const isDone = stepIndex > i;
               return (

@@ -92,7 +92,8 @@ export function CustomizationStudio({ product, variant, onComplete, onBack }: Pr
     style: string,
     negativePrompt: string = '',
     aspectRatio: string = '1:1',
-    refImages: Array<{ base64: string; mimeType: string }> = []
+    refImages: Array<{ base64: string; mimeType: string }> = [],
+    model: string = 'gemini-2.5-flash-image'
   ) => {
     setGeneratingAI(true);
     setAiError(null);
@@ -109,6 +110,7 @@ export function CustomizationStudio({ product, variant, onComplete, onBack }: Pr
           aspectRatio,
           printPlacement: activePlacement,
           refImages,
+          model,
         }),
       });
 
