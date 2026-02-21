@@ -57,7 +57,6 @@ class PrintfulService {
     const data = await this.request(`/products/${productId}`);
     const product = data.result?.product || data.result;
     
-    // Les variantes sont dans result.variants (tableau)
     const rawVariants = Array.isArray(data.result?.variants)
       ? data.result.variants
       : [];
@@ -70,12 +69,29 @@ class PrintfulService {
       color_code: v.color_code || v.color_code2 || '#cccccc',
       price:      v.price || '0.00',
       in_stock:   v.in_stock !== false,
+      preview_url: v.preview_url || null,
     }));
+
+    // Fetch les images du produit (différents angles)
+    let placementImages = {};
+    try {
+      const imgData = await this.request(`/products/${productId}/images`);
+      const images = Array.isArray(imgData.result) ? imgData.result : [];
+      // Map placement → url d'image
+      images.forEach(img => {
+        if (img.placement && img.url && !placementImages[img.placement]) {
+          placementImages[img.placement] = img.url;
+        }
+      });
+    } catch(e) {
+      // Pas critique si les images supplémentaires ne sont pas dispo
+    }
 
     return {
       product,
       variants,
       printAreas: this._extractPrintAreas(product),
+      placementImages,
     };
   }
 

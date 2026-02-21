@@ -16,6 +16,7 @@ export function CustomizationStudio({ product, variant, onComplete, onBack }: Pr
   const fabricRef = useRef<fabric.Canvas | null>(null);
 
   const [productDetails, setProductDetails] = useState<any>(null);
+  const [placementImages, setPlacementImages] = useState<Record<string, string>>({});
   const [loadingDetails, setLoadingDetails] = useState(true);
   const [activePlacement, setActivePlacement] = useState<string>('');
   const [placements, setPlacements] = useState<Record<string, any>>({});
@@ -25,6 +26,12 @@ export function CustomizationStudio({ product, variant, onComplete, onBack }: Pr
   const [generatingMockup, setGeneratingMockup] = useState(false);
 
   const { generateMockup } = useMockupGenerator();
+  const placementsRef = useRef<Record<string, any>>({});
+
+  // ─── Sync placementsRef ──────────────────────────────────────────────────────
+  useEffect(() => {
+    placementsRef.current = placements;
+  }, [placements]);
 
   // ─── Fetch détails produit (vraies zones) ─────────────────────────────────
 
@@ -37,6 +44,7 @@ export function CustomizationStudio({ product, variant, onComplete, onBack }: Pr
       .then(r => r.json())
       .then(data => {
         setProductDetails(data);
+        if (data.placementImages) setPlacementImages(data.placementImages);
         // Active la première zone disponible
         if (data.printAreas?.length > 0) {
           setActivePlacement(data.printAreas[0].placement);
@@ -71,34 +79,44 @@ export function CustomizationStudio({ product, variant, onComplete, onBack }: Pr
 
     canvas.clear();
 
-    // Affiche l'image produit en fond semi-transparent
-    const productImg = product?.image || product?.product?.image_url;
+    // Priorité : image spécifique au placement > image variante > image catalogue
+    const productImg = placementImages[activePlacement]
+      || placementImages['front']
+      || product?.image
+      || product?.product?.image_url;
+
+    const finishSetup = () => {
+      drawPrintAreaGuide(canvas, activePlacement);
+      // Utilise placementsRef pour éviter la closure stale
+      const saved = placementsRef.current[activePlacement];
+      if (saved?.fabricJSON) {
+        // Restaure uniquement les objets selectables (pas le fond)
+        const json = saved.fabricJSON;
+        const selectableOnly = { ...json, objects: (json.objects || []).filter((o: any) => o.selectable !== false) };
+        canvas.loadFromJSON(selectableOnly, () => canvas.renderAll());
+      } else {
+        canvas.renderAll();
+      }
+    };
+
     if (productImg) {
       fabric.Image.fromURL(productImg, (img: fabric.Image) => {
-        if (!img) return;
+        if (!img) { finishSetup(); return; }
         const scale = Math.min(500 / (img.width || 500), 500 / (img.height || 500));
         img.set({
           left: (500 - (img.width || 0) * scale) / 2,
           top: (500 - (img.height || 0) * scale) / 2,
-          scaleX: scale,
-          scaleY: scale,
-          opacity: 0.3,
+          scaleX: scale, scaleY: scale,
+          opacity: 0.25,
           selectable: false,
           evented: false,
+          data: { isBackground: true },
         });
         canvas.add(img);
-        drawPrintAreaGuide(canvas, activePlacement);
-
-        // Restaure design existant
-        const saved = placements[activePlacement];
-        if (saved?.fabricJSON) {
-          canvas.loadFromJSON(saved.fabricJSON, () => canvas.renderAll());
-        } else {
-          canvas.renderAll();
-        }
+        finishSetup();
       }, { crossOrigin: 'anonymous' });
     } else {
-      drawPrintAreaGuide(canvas, activePlacement);
+      finishSetup();
     }
   }, [activePlacement]);
 
