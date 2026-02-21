@@ -35,7 +35,7 @@ const AI_MODELS = [
 ];
 
 interface Props {
-  onGenerate: (prompt: string, style: string, negativePrompt: string, aspectRatio: string, refImages: RefImage[], model: string) => void;
+  onGenerate: (prompt: string, style: string, negativePrompt: string, aspectRatio: string, refImages: RefImage[], model: string, removeBackground: boolean, upscale: boolean) => void;
   loading: boolean;
   error: string | null;
   activePlacement: string;
@@ -43,11 +43,14 @@ interface Props {
 }
 
 const STYLES = [
-  { id: 'illustration', label: 'Illustration', emoji: '🎨' },
-  { id: 'realistic',    label: 'Réaliste',     emoji: '📸' },
-  { id: 'abstract',     label: 'Abstrait',      emoji: '🌀' },
-  { id: 'pixel-art',   label: 'Pixel Art',     emoji: '🕹️' },
-  { id: 'watercolor',  label: 'Aquarelle',     emoji: '💧' },
+  { id: 'illustration',    label: 'Illustration',   emoji: '🎨' },
+  { id: 'realistic',       label: 'Réaliste',        emoji: '📸' },
+  { id: 'abstract',        label: 'Abstrait',         emoji: '🌀' },
+  { id: 'pixel-art',      label: 'Pixel Art',        emoji: '🕹️' },
+  { id: 'watercolor',     label: 'Aquarelle',        emoji: '💧' },
+  { id: 'pixar',          label: 'Pixar 3D',         emoji: '✨' },
+  { id: 'gta-comic',      label: 'GTA / BD',         emoji: '🎮' },
+  { id: 'minimal-vector', label: 'Minimaliste',      emoji: '◻' },
 ];
 
 const PROMPT_PRESETS = [
@@ -86,6 +89,8 @@ export function AIPromptPanel({ onGenerate, loading, error, activePlacement, pla
   const [aspectRatio, setAspectRatio] = useState('1:1');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash-image');
+  const [removeBackground, setRemoveBackground] = useState(true);
+  const [upscale, setUpscale] = useState(true);
   const [refImages, setRefImages] = useState<RefImage[]>([]);
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -129,7 +134,7 @@ export function AIPromptPanel({ onGenerate, loading, error, activePlacement, pla
 
   const handleSubmit = () => {
     if (!prompt.trim() || loading) return;
-    onGenerate(prompt.trim(), style, negativePrompt, aspectRatio, refImages, selectedModel);
+    onGenerate(prompt.trim(), style, negativePrompt, aspectRatio, refImages, selectedModel, removeBackground, upscale);
   };
 
   return (
@@ -297,6 +302,36 @@ export function AIPromptPanel({ onGenerate, loading, error, activePlacement, pla
         </div>
       )}
 
+      {/* ── PIPELINE OPTIONS ── */}
+      {refImages.length > 0 && (
+        <div className="pipeline-badge">
+          <span className="pipeline-badge__icon">🔄</span>
+          <div>
+            <span className="pipeline-badge__title">Mode IMAGE → IMAGE actif</span>
+            <span className="pipeline-badge__sub">Replicate SDXL + IP-Adapter · Garde votre visage/sujet</span>
+          </div>
+        </div>
+      )}
+      <div className="pipeline-options">
+        <span className="section-label">Post-traitement automatique</span>
+        <label className="pipeline-toggle">
+          <input type="checkbox" checked={removeBackground} onChange={e => setRemoveBackground(e.target.checked)} disabled={loading} />
+          <span className="pipeline-toggle__box" />
+          <div>
+            <span className="pipeline-toggle__label">✂️ Suppression fond</span>
+            <span className="pipeline-toggle__sub">PNG transparent pour impression propre</span>
+          </div>
+        </label>
+        <label className="pipeline-toggle">
+          <input type="checkbox" checked={upscale} onChange={e => setUpscale(e.target.checked)} disabled={loading} />
+          <span className="pipeline-toggle__box" />
+          <div>
+            <span className="pipeline-toggle__label">🔍 Upscale 4× · 300 DPI</span>
+            <span className="pipeline-toggle__sub">Haute définition pour impression Printful</span>
+          </div>
+        </label>
+      </div>
+
       {/* ── MODEL SELECTOR ── */}
       <div className="model-selector">
         <span className="section-label">Moteur IA</span>
@@ -340,7 +375,7 @@ export function AIPromptPanel({ onGenerate, loading, error, activePlacement, pla
       </div>
 
       <p className="ai-disclaimer">
-        {selectedModel === 'gemini-3-pro-image-preview' ? 'Gemini 3 Pro Image · 4K · ~20s' : 'Gemini 2.5 Flash Image · 500/jour gratuit'} · Usage commercial inclus
+        {refImages.length > 0 ? 'Replicate SDXL + IP-Adapter' : selectedModel === 'gemini-3-pro-image-preview' ? 'Gemini 3 Pro · 4K' : 'Gemini 2.5 Flash'} · Usage commercial inclus
       </p>
     </div>
   );

@@ -9,6 +9,7 @@
  * - Export HD pour Printful
  */
 
+import { BeforeAfterSlider } from './BeforeAfterSlider';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { fabric } from 'fabric';
 import { PrintZoneManager } from './PrintZoneManager';
@@ -32,6 +33,9 @@ export function CustomizationStudio({ product, variant, onComplete, onBack }: Pr
   const [generatingAI, setGeneratingAI] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [mockupUrl, setMockupUrl] = useState<string | null>(null);
+  const [rawImageUrl, setRawImageUrl] = useState<string | null>(null);
+  const [originalUrl, setOriginalUrl] = useState<string | null>(null);
+  const [showSlider, setShowSlider] = useState(false);
   const [generatingMockup, setGeneratingMockup] = useState(false);
 
   const { generateMockup } = useMockupGenerator();
@@ -93,7 +97,9 @@ export function CustomizationStudio({ product, variant, onComplete, onBack }: Pr
     negativePrompt: string = '',
     aspectRatio: string = '1:1',
     refImages: Array<{ base64: string; mimeType: string }> = [],
-    model: string = 'gemini-2.5-flash-image'
+    model: string = 'gemini-2.5-flash-image',
+    removeBackground: boolean = true,
+    upscale: boolean = true
   ) => {
     setGeneratingAI(true);
     setAiError(null);
@@ -111,6 +117,8 @@ export function CustomizationStudio({ product, variant, onComplete, onBack }: Pr
           printPlacement: activePlacement,
           refImages,
           model,
+          removeBackground,
+          upscale,
         }),
       });
 
@@ -120,7 +128,9 @@ export function CustomizationStudio({ product, variant, onComplete, onBack }: Pr
       }
 
       const data = await res.json();
-      const { url, hdUrl } = data;
+      const { url, hdUrl, rawUrl, originalUrl: origUrl } = data;
+      if (origUrl) { setOriginalUrl(origUrl); setShowSlider(true); }
+      else if (rawUrl && rawUrl !== url) { setOriginalUrl(rawUrl); setShowSlider(false); }
 
       // Charge l'image sur le canvas Fabric.js
       await loadImageOnCanvas(url, fabricRef.current!, activePlacement);
