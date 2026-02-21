@@ -136,6 +136,33 @@ export function CustomizationStudio({ product, variant, onComplete, onBack }: Pr
     setMockupUrl(null);
   };
 
+  // ─── Mockup vide au chargement de chaque zone ─────────────────────────────
+
+  useEffect(() => {
+    if (!activePlacement || !variant?.id) return;
+    // Si déjà un mockup pour cette zone, on l'affiche directement
+    const existing = placementsRef.current[activePlacement]?.mockupUrl;
+    if (existing) { setMockupUrl(existing); return; }
+    // Sinon génère un mockup vide (image transparente 1x1)
+    setGeneratingMockup(true);
+    generateMockup(variant.id, [{
+      placement: activePlacement,
+      url: 'https://files.cdn.printful.com/files/transparent_1x1.png',
+    }])
+      .then((mockups: any) => {
+        const url = mockups?.[0]?.mockup_url || null;
+        setMockupUrl(url);
+        if (url) {
+          placementsRef.current = {
+            ...placementsRef.current,
+            [activePlacement]: { ...placementsRef.current[activePlacement], mockupUrl: url },
+          };
+        }
+      })
+      .catch(() => setMockupUrl(null))
+      .finally(() => setGeneratingMockup(false));
+  }, [activePlacement, variant?.id]);
+
   // ─── Génération IA ─────────────────────────────────────────────────────────
 
   const handleGenerateAI = useCallback(async (prompt: string, style: string) => {
