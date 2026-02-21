@@ -53,39 +53,32 @@ class PrintfulService {
   }
 
   async getProductDetails(productId) {
-    // /catalog/products/:id retourne produit + variantes en une requête
-    const data = await this.request(`/catalog/products/${productId}`);
-    const productData = data.result;
+    // Printful API v2: produit d'un côté, variantes de l'autre
+    const [productData, variantsData] = await Promise.all([
+      this.request(`/catalog/products/${productId}`),
+      this.request(`/catalog/variants?product_id=${productId}&limit=100`),
+    ]);
 
-    // Les variantes sont dans data.result.variants (tableau d'objets avec id, name, size, color, color_code, price)
-    let variantList = [];
-    if (Array.isArray(productData?.variants)) {
-      variantList = productData.variants;
-    } else {
-      // Fallback: requête séparée
-      try {
-        const varData = await this.request(`/catalog/products/${productId}/variants`);
-        variantList = Array.isArray(varData.result) ? varData.result : Object.values(varData.result || {});
-      } catch(e) {
-        console.warn('Variants fetch failed:', e.message);
-      }
-    }
+    const product = productData.result?.product || productData.result;
 
-    // Normalise les champs variantes pour le frontend
-    const variants = variantList.map(v => ({
-      id:          v.id,
-      name:        v.name || v.title || '',
-      size:        v.size || v.name || '',
-      color:       v.color || v.color_name || 'Default',
-      color_code:  v.color_code || v.color_code2 || '#cccccc',
-      price:       v.price || '0.00',
-      in_stock:    v.in_stock !== false,
+    const rawVariants = Array.isArray(variantsData.result)
+      ? variantsData.result
+      : Object.values(variantsData.result || {});
+
+    const variants = rawVariants.map(v => ({
+      id:         v.id,
+      name:       v.name || '',
+      size:       v.size || '',
+      color:      v.color || v.color_name || 'Default',
+      color_code: v.color_code || v.color_code2 || '#cccccc',
+      price:      v.price || '0.00',
+      in_stock:   v.in_stock !== false,
     }));
 
     return {
-      product: productData,
+      product,
       variants,
-      printAreas: this._extractPrintAreas(productData),
+      printAreas: this._extractPrintAreas(product),
     };
   }
 
