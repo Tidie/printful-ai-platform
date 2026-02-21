@@ -153,30 +153,54 @@ class PrintfulService {
 
   _formatPlacementLabel(placement) {
     const labels = {
-      'front':              'Devant',
-      'back':               'Dos',
-      'left-sleeve':        'Manche gauche',
-      'right-sleeve':       'Manche droite',
-      'label-outside':      'Étiquette extérieure',
-      'label-inside':       'Étiquette intérieure',
-      'embroidery-front':   'Broderie devant',
-      'embroidery-back':    'Broderie dos',
-      'pocket-area':        'Poche',
-      'all-over':           'All-over',
-      'chest-left':         'Poitrine gauche',
-      'chest-right':        'Poitrine droite',
-      'chest-center':       'Poitrine centre',
-      'wrist-left':         'Poignet gauche',
-      'wrist-right':        'Poignet droit',
-      'sleeve-left':        'Manche gauche',
-      'sleeve-right':       'Manche droite',
-      'collar-back':        'Col dos',
-      'inside-label':       'Étiquette intérieure',
-      'outside-label':      'Étiquette extérieure',
-      'large-front':        'Grand format devant',
-      'large-back':         'Grand format dos',
+      // tirets
+      'front':                    'Devant',
+      'back':                     'Dos',
+      'left-sleeve':              'Manche gauche',
+      'right-sleeve':             'Manche droite',
+      'label-outside':            'Étiquette extérieure',
+      'label-inside':             'Étiquette intérieure',
+      'embroidery-front':         'Broderie devant',
+      'embroidery-back':          'Broderie dos',
+      'pocket-area':              'Poche',
+      'all-over':                 'All-over',
+      'chest-left':               'Poitrine gauche',
+      'chest-right':              'Poitrine droite',
+      'chest-center':             'Poitrine centre',
+      'wrist-left':               'Poignet gauche',
+      'wrist-right':              'Poignet droit',
+      'sleeve-left':              'Manche gauche',
+      'sleeve-right':             'Manche droite',
+      'collar-back':              'Col dos',
+      'inside-label':             'Étiquette intérieure',
+      'outside-label':            'Étiquette extérieure',
+      'large-front':              'Grand format devant',
+      'large-back':               'Grand format dos',
+      // underscores (format Printful v1)
+      'embroidery_chest_left':    'Poitrine gauche',
+      'embroidery_chest_right':   'Poitrine droite',
+      'embroidery_chest_center':  'Poitrine centre',
+      'embroidery_wrist_left':    'Poignet gauche',
+      'embroidery_wrist_right':   'Poignet droit',
+      'embroidery_front':         'Broderie devant',
+      'embroidery_back':          'Broderie dos',
+      'embroidery_sleeve_left':   'Manche gauche',
+      'embroidery_sleeve_right':  'Manche droite',
+      'embroidery_collar_back':   'Col dos',
+      'dtg_front':                'Devant',
+      'dtg_back':                 'Dos',
+      'dtg_sleeve_left':          'Manche gauche',
+      'dtg_sleeve_right':         'Manche droite',
+      'dtg_chest_left':           'Poitrine gauche',
     };
-    return labels[placement] || placement;
+
+    if (labels[placement]) return labels[placement];
+
+    // Nettoyage automatique des underscores pour les cas non listés
+    return placement
+      .replace(/^(embroidery|dtg|sublimation)_/, '')
+      .replace(/_/g, ' ')
+      .replace(/\w/g, c => c.toUpperCase());
   }
 
   // ─── Catégories ───────────────────────────────────────────────────────────

@@ -1,14 +1,3 @@
-/**
- * CustomizationStudio.tsx
- * 
- * Interface de personnalisation avec :
- * - Canvas Fabric.js pour superposer l'image IA sur le mockup produit
- * - Gestion multi-zone (devant, dos, manches)
- * - Génération IA avec prompt
- * - Contraintes techniques par zone (embroidery vs DTG)
- * - Export HD pour Printful
- */
-
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { fabric } from 'fabric';
 import { PrintZoneManager } from './PrintZoneManager';
@@ -27,14 +16,35 @@ export function CustomizationStudio({ product, variant, onComplete, onBack }: Pr
   const fabricRef = useRef<fabric.Canvas | null>(null);
 
   const [productDetails, setProductDetails] = useState<any>(null);
-  const [activePlacement, setActivePlacement] = useState<string>('front');
-  const [placements, setPlacements] = useState<Record<string, any>>({}); // placement → {fabricJSON, aiImageUrl, hdUrl}
+  const [loadingDetails, setLoadingDetails] = useState(true);
+  const [activePlacement, setActivePlacement] = useState<string>('');
+  const [placements, setPlacements] = useState<Record<string, any>>({});
   const [generatingAI, setGeneratingAI] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [mockupUrl, setMockupUrl] = useState<string | null>(null);
   const [generatingMockup, setGeneratingMockup] = useState(false);
 
   const { generateMockup } = useMockupGenerator();
+
+  // ─── Fetch détails produit (vraies zones) ─────────────────────────────────
+
+  useEffect(() => {
+    const id = product?.id || product?.product?.id;
+    if (!id) return;
+
+    setLoadingDetails(true);
+    fetch(`/api/printful/products/${id}`)
+      .then(r => r.json())
+      .then(data => {
+        setProductDetails(data);
+        // Active la première zone disponible
+        if (data.printAreas?.length > 0) {
+          setActivePlacement(data.printAreas[0].placement);
+        }
+      })
+      .catch(console.error)
+      .finally(() => setLoadingDetails(false));
+  }, [product]);
 
   // ─── Init Fabric.js ────────────────────────────────────────────────────────
 
@@ -44,46 +54,69 @@ export function CustomizationStudio({ product, variant, onComplete, onBack }: Pr
     const canvas = new fabric.Canvas(canvasRef.current, {
       width: 500,
       height: 500,
-      backgroundColor: '#f8f8f8',
+      backgroundColor: '#f4f4f2',
       preserveObjectStacking: true,
     });
 
     fabricRef.current = canvas;
 
-    // Guides visuels de la zone d'impression
-    drawPrintAreaGuide(canvas, activePlacement);
-
-    return () => {
-      canvas.dispose();
-    };
+    return () => { canvas.dispose(); };
   }, []);
 
-  // ─── Changement de placement ───────────────────────────────────────────────
+  // ─── Mise à jour canvas quand le placement change ─────────────────────────
 
   useEffect(() => {
     const canvas = fabricRef.current;
-    if (!canvas) return;
+    if (!canvas || !activePlacement) return;
 
-    // Sauvegarde l'état du canvas actuel
-    if (activePlacement) {
-      setPlacements(prev => ({
-        ...prev,
-        [activePlacement]: {
-          ...prev[activePlacement],
-          fabricJSON: canvas.toJSON(),
-        },
-      }));
-    }
-
-    // Restaure le canvas du nouveau placement
     canvas.clear();
-    const saved = placements[activePlacement];
-    if (saved?.fabricJSON) {
-      canvas.loadFromJSON(saved.fabricJSON, () => canvas.renderAll());
+
+    // Affiche l'image produit en fond semi-transparent
+    const productImg = product?.image || product?.product?.image_url;
+    if (productImg) {
+      fabric.Image.fromURL(productImg, (img: fabric.Image) => {
+        if (!img) return;
+        const scale = Math.min(500 / (img.width || 500), 500 / (img.height || 500));
+        img.set({
+          left: (500 - (img.width || 0) * scale) / 2,
+          top: (500 - (img.height || 0) * scale) / 2,
+          scaleX: scale,
+          scaleY: scale,
+          opacity: 0.3,
+          selectable: false,
+          evented: false,
+        });
+        canvas.add(img);
+        drawPrintAreaGuide(canvas, activePlacement);
+
+        // Restaure design existant
+        const saved = placements[activePlacement];
+        if (saved?.fabricJSON) {
+          canvas.loadFromJSON(saved.fabricJSON, () => canvas.renderAll());
+        } else {
+          canvas.renderAll();
+        }
+      }, { crossOrigin: 'anonymous' });
     } else {
       drawPrintAreaGuide(canvas, activePlacement);
     }
   }, [activePlacement]);
+
+  // ─── Sauvegarde placement courant avant switch ────────────────────────────
+
+  const switchPlacement = (newPlacement: string) => {
+    if (fabricRef.current && activePlacement) {
+      setPlacements(prev => ({
+        ...prev,
+        [activePlacement]: {
+          ...prev[activePlacement],
+          fabricJSON: fabricRef.current!.toJSON(),
+        },
+      }));
+    }
+    setActivePlacement(newPlacement);
+    setMockupUrl(null);
+  };
 
   // ─── Génération IA ─────────────────────────────────────────────────────────
 
@@ -107,10 +140,8 @@ export function CustomizationStudio({ product, variant, onComplete, onBack }: Pr
       const data = await res.json();
       const { url, hdUrl } = data;
 
-      // Charge l'image sur le canvas Fabric.js
       await loadImageOnCanvas(url, fabricRef.current!, activePlacement);
 
-      // Stocke les URLs pour l'export final
       setPlacements(prev => ({
         ...prev,
         [activePlacement]: {
@@ -121,9 +152,7 @@ export function CustomizationStudio({ product, variant, onComplete, onBack }: Pr
         },
       }));
 
-      // Génère un mockup prévisuel
       await handleGenerateMockup(url);
-
     } catch (err: any) {
       setAiError(err.message);
     } finally {
@@ -135,13 +164,8 @@ export function CustomizationStudio({ product, variant, onComplete, onBack }: Pr
     if (!variant?.id) return;
     setGeneratingMockup(true);
     try {
-      const mockups = await generateMockup(variant.id, [{
-        placement: activePlacement,
-        url: imageUrl,
-      }]);
-      if (mockups?.[0]?.mockup_url) {
-        setMockupUrl(mockups[0].mockup_url);
-      }
+      const mockups = await generateMockup(variant.id, [{ placement: activePlacement, url: imageUrl }]);
+      if (mockups?.[0]?.mockup_url) setMockupUrl(mockups[0].mockup_url);
     } catch (e) {
       console.error('Mockup error:', e);
     } finally {
@@ -153,11 +177,8 @@ export function CustomizationStudio({ product, variant, onComplete, onBack }: Pr
 
   const handleAddText = () => {
     const text = new fabric.IText('Votre texte', {
-      left: 150, top: 150,
-      fontSize: 32,
-      fill: '#000000',
-      fontFamily: 'Arial',
-      fontWeight: 'bold',
+      left: 150, top: 200, fontSize: 32,
+      fill: '#000000', fontFamily: 'Arial', fontWeight: 'bold',
     });
     fabricRef.current?.add(text).setActiveObject(text);
   };
@@ -165,9 +186,9 @@ export function CustomizationStudio({ product, variant, onComplete, onBack }: Pr
   const handleScaleAll = (factor: number) => {
     const canvas = fabricRef.current;
     if (!canvas) return;
-      canvas.getObjects().forEach((obj: any) => {
-      if (obj.type !== 'rect') { // ne pas scaler le guide
-        obj.scale((obj.scaleX || 1) * factor);
+    canvas.getObjects().forEach((obj: fabric.Object) => {
+      if (!(obj as any).data?.isGuide && obj.type !== 'image' || (obj as any).selectable) {
+        obj.scale(((obj.scaleX || 1) * factor));
       }
     });
     canvas.renderAll();
@@ -176,9 +197,11 @@ export function CustomizationStudio({ product, variant, onComplete, onBack }: Pr
   const handleClearCanvas = () => {
     const canvas = fabricRef.current;
     if (!canvas) return;
-    const guide = canvas.getObjects('rect')[0]; // garde le guide
-    canvas.clear();
-    if (guide) canvas.add(guide);
+    // Garde seulement l'image produit (opacity 0.3) et le guide
+    const toRemove = canvas.getObjects().filter((o: fabric.Object) =>
+      (o as any).selectable !== false
+    );
+    toRemove.forEach((o: fabric.Object) => canvas.remove(o));
     canvas.renderAll();
     setPlacements(prev => ({
       ...prev,
@@ -190,41 +213,35 @@ export function CustomizationStudio({ product, variant, onComplete, onBack }: Pr
   // ─── Export Final ──────────────────────────────────────────────────────────
 
   const handleComplete = () => {
-    // Sauvegarde le placement actif
     const currentJSON = fabricRef.current?.toJSON();
-    const currentPlacement = placements[activePlacement] || {};
-
     const allPlacements = {
       ...placements,
-      [activePlacement]: { ...currentPlacement, fabricJSON: currentJSON },
+      [activePlacement]: { ...placements[activePlacement], fabricJSON: currentJSON },
     };
 
-    // Construit la liste des fichiers pour Printful
     const files = Object.entries(allPlacements)
       .filter(([, data]: any) => data?.hdUrl)
-      .map(([placement, data]: any) => ({
-        placement,
-        url: data.aiImageUrl,
-        hdUrl: data.hdUrl,
-      }));
+      .map(([placement, data]: any) => ({ placement, url: data.aiImageUrl, hdUrl: data.hdUrl }));
 
     if (!files.length) {
       alert('Ajoutez au moins un design avant de continuer.');
       return;
     }
 
-    // Exporte le canvas haute résolution pour la prévisualisation
     const previewDataUrl = fabricRef.current?.toDataURL({ multiplier: 2 });
-
-    onComplete({
-      files,
-      previewUrl: previewDataUrl,
-      mockupUrl,
-      placements: Object.keys(allPlacements).filter(p => allPlacements[p]?.hdUrl),
-    });
+    onComplete({ files, previewUrl: previewDataUrl, mockupUrl, placements: Object.keys(allPlacements).filter(p => allPlacements[p]?.hdUrl) });
   };
 
-  const activePrintAreas = productDetails?.printAreas || getDefaultPrintAreas(product);
+  // ─── Zones actives ─────────────────────────────────────────────────────────
+
+  const activePrintAreas = productDetails?.printAreas?.length
+    ? productDetails.printAreas
+    : [
+        { placement: 'front', label: 'Devant', techniques: [{ id: 'dtg', name: 'Impression DTG' }], constraints: { width: 12, height: 16 } },
+        { placement: 'back',  label: 'Dos',    techniques: [{ id: 'dtg', name: 'Impression DTG' }], constraints: { width: 12, height: 16 } },
+      ];
+
+  const currentArea = activePrintAreas.find((a: any) => a.placement === activePlacement);
 
   return (
     <div className="studio-layout">
@@ -235,46 +252,32 @@ export function CustomizationStudio({ product, variant, onComplete, onBack }: Pr
           loading={generatingAI}
           error={aiError}
           activePlacement={activePlacement}
-          placement={activePrintAreas.find((a: any) => a.placement === activePlacement)}
+          placement={currentArea}
         />
       </aside>
 
       {/* ── Center: Canvas ── */}
       <div className="studio-center">
-        {/* Zone selector */}
         <div className="placement-tabs">
           {activePrintAreas.map((area: any) => (
             <button
               key={area.placement}
               className={`placement-tab ${activePlacement === area.placement ? 'active' : ''} ${placements[area.placement]?.hdUrl ? 'has-design' : ''}`}
-              onClick={() => setActivePlacement(area.placement)}
+              onClick={() => switchPlacement(area.placement)}
             >
               {area.label}
-              {placements[area.placement]?.hdUrl && <span className="design-dot" />}
             </button>
           ))}
         </div>
 
-        {/* Canvas principal */}
         <div className="canvas-wrapper">
-          {/* Mockup background */}
           {mockupUrl && (
             <div className="mockup-overlay">
               <img src={mockupUrl} alt="Mockup" className="mockup-bg" />
               {generatingMockup && <div className="mockup-loading">Mise à jour…</div>}
             </div>
           )}
-
-          {!mockupUrl && (
-            <div className="canvas-placeholder">
-              <div className="placeholder-product-img">
-                <img src={product.image} alt={product.name} />
-              </div>
-            </div>
-          )}
-
           <canvas ref={canvasRef} className="fabric-canvas" />
-
           {generatingAI && (
             <div className="ai-generating-overlay">
               <div className="ai-spinner" />
@@ -283,20 +286,11 @@ export function CustomizationStudio({ product, variant, onComplete, onBack }: Pr
           )}
         </div>
 
-        {/* Toolbar canvas */}
         <div className="canvas-toolbar">
-          <button className="tool-btn" onClick={handleAddText} title="Ajouter du texte">
-            <span>T</span> Texte
-          </button>
-          <button className="tool-btn" onClick={() => handleScaleAll(1.1)} title="Agrandir">
-            ⊕ +
-          </button>
-          <button className="tool-btn" onClick={() => handleScaleAll(0.9)} title="Réduire">
-            ⊖ –
-          </button>
-          <button className="tool-btn tool-btn-danger" onClick={handleClearCanvas}>
-            ✕ Effacer
-          </button>
+          <button className="tool-btn" onClick={handleAddText}>T Texte</button>
+          <button className="tool-btn" onClick={() => handleScaleAll(1.1)}>⊕ +</button>
+          <button className="tool-btn" onClick={() => handleScaleAll(0.9)}>⊖ –</button>
+          <button className="tool-btn tool-btn-danger" onClick={handleClearCanvas}>✕ Effacer</button>
         </div>
       </div>
 
@@ -306,10 +300,8 @@ export function CustomizationStudio({ product, variant, onComplete, onBack }: Pr
           printAreas={activePrintAreas}
           placements={placements}
           activePlacement={activePlacement}
-          onPlacementChange={setActivePlacement}
+          onPlacementChange={switchPlacement}
         />
-
-        {/* CTA */}
         <div className="studio-actions">
           <button className="btn-secondary" onClick={onBack}>← Changer de produit</button>
           <button
@@ -320,8 +312,6 @@ export function CustomizationStudio({ product, variant, onComplete, onBack }: Pr
             Passer à la commande →
           </button>
         </div>
-
-        {/* Résumé variante */}
         {variant && (
           <div className="variant-summary">
             <div className="variant-color" style={{ backgroundColor: variant.color_code }} />
@@ -340,27 +330,20 @@ export function CustomizationStudio({ product, variant, onComplete, onBack }: Pr
 
 async function loadImageOnCanvas(url: string, canvas: fabric.Canvas, placement: string) {
   return new Promise<void>((resolve, reject) => {
-    fabric.Image.fromURL(url, (img) => {
+    fabric.Image.fromURL(url, (img: fabric.Image) => {
       if (!img) { reject(new Error('Image load failed')); return; }
-
-      // Adapte la taille à la zone d'impression
-      const maxSize = placement === 'all-over' ? 500 : 250;
-      const scale = Math.min(maxSize / img.width!, maxSize / img.height!);
-
+      const maxSize = placement.includes('wrist') || placement.includes('chest') ? 120 : 250;
+      const scale = Math.min(maxSize / (img.width || 1), maxSize / (img.height || 1));
       img.set({
-        left: (canvas.width! - img.width! * scale) / 2,
-        top: (canvas.height! - img.height! * scale) / 2,
-        scaleX: scale,
-        scaleY: scale,
-        cornerColor: '#6366f1',
+        left: (500 - (img.width || 0) * scale) / 2,
+        top: (500 - (img.height || 0) * scale) / 2,
+        scaleX: scale, scaleY: scale,
+        cornerColor: '#333',
         cornerStyle: 'circle',
         transparentCorners: false,
       });
-
-      // Supprime les anciennes images IA (garde les textes)
-      const existing = canvas.getObjects('image');
-      existing.forEach(obj => canvas.remove(obj));
-
+      const existing = canvas.getObjects('image').filter((o: fabric.Object) => (o as any).selectable !== false);
+      existing.forEach((o: fabric.Object) => canvas.remove(o));
       canvas.add(img);
       canvas.setActiveObject(img);
       canvas.renderAll();
@@ -370,63 +353,48 @@ async function loadImageOnCanvas(url: string, canvas: fabric.Canvas, placement: 
 }
 
 function drawPrintAreaGuide(canvas: fabric.Canvas, placement: string) {
-  // Zone d'impression recommandée visualisée en pointillés
-  const zoneConfigs: Record<string, { left: number; top: number; width: number; height: number }> = {
-    'front': { left: 150, top: 100, width: 200, height: 250 },
-    'back': { left: 150, top: 100, width: 200, height: 250 },
-    'left-sleeve': { left: 80, top: 120, width: 80, height: 180 },
-    'right-sleeve': { left: 340, top: 120, width: 80, height: 180 },
-    'pocket-area': { left: 170, top: 140, width: 80, height: 80 },
-    'all-over': { left: 20, top: 20, width: 460, height: 460 },
+  // Zones adaptées aux vrais placements Printful
+  const zones: Record<string, { left: number; top: number; width: number; height: number; label: string }> = {
+    'front':                    { left: 150, top: 100, width: 200, height: 250, label: 'Zone devant' },
+    'back':                     { left: 150, top: 100, width: 200, height: 250, label: 'Zone dos' },
+    'embroidery_chest_left':    { left: 140, top: 160, width: 90,  height: 90,  label: 'Poitrine gauche' },
+    'embroidery_chest_right':   { left: 270, top: 160, width: 90,  height: 90,  label: 'Poitrine droite' },
+    'embroidery_chest_center':  { left: 175, top: 160, width: 150, height: 120, label: 'Poitrine centre' },
+    'embroidery_wrist_left':    { left: 60,  top: 300, width: 70,  height: 60,  label: 'Poignet gauche' },
+    'embroidery_wrist_right':   { left: 370, top: 300, width: 70,  height: 60,  label: 'Poignet droit' },
+    'embroidery_front':         { left: 150, top: 120, width: 180, height: 200, label: 'Broderie devant' },
+    'embroidery_back':          { left: 150, top: 120, width: 180, height: 200, label: 'Broderie dos' },
+    'embroidery_sleeve_left':   { left: 60,  top: 120, width: 80,  height: 160, label: 'Manche gauche' },
+    'embroidery_sleeve_right':  { left: 360, top: 120, width: 80,  height: 160, label: 'Manche droite' },
+    'left-sleeve':              { left: 60,  top: 120, width: 80,  height: 160, label: 'Manche gauche' },
+    'right-sleeve':             { left: 360, top: 120, width: 80,  height: 160, label: 'Manche droite' },
+    'pocket-area':              { left: 170, top: 155, width: 80,  height: 80,  label: 'Zone poche' },
+    'all-over':                 { left: 20,  top: 20,  width: 460, height: 460, label: 'All-over' },
   };
 
-  const config = zoneConfigs[placement] || zoneConfigs['front'];
+  const config = zones[placement] || zones['front'];
 
   const guide = new fabric.Rect({
     ...config,
-    fill: 'transparent',
-    stroke: '#6366f1',
+    fill: 'rgba(100, 116, 139, 0.06)',
+    stroke: '#64748b',
     strokeWidth: 1.5,
-    strokeDashArray: [6, 4],
+    strokeDashArray: [5, 4],
     selectable: false,
     evented: false,
-    hoverCursor: 'default',
     data: { isGuide: true },
   });
 
-  canvas.add(guide);
-
-  // Label de la zone
-  const label = new fabric.Text(getZoneLabel(placement), {
+  const label = new fabric.Text(config.label, {
     left: config.left,
-    top: config.top - 22,
+    top: config.top - 20,
     fontSize: 11,
-    fill: '#6366f1',
+    fill: '#64748b',
     selectable: false,
     evented: false,
     fontFamily: 'monospace',
   });
-  canvas.add(label);
+
+  canvas.add(guide, label);
   canvas.renderAll();
-}
-
-function getZoneLabel(placement: string): string {
-  const labels: Record<string, string> = {
-    'front': 'Zone avant · recommandée',
-    'back': 'Zone dos · recommandée',
-    'left-sleeve': 'Manche gauche',
-    'right-sleeve': 'Manche droite',
-    'pocket-area': 'Zone poche',
-    'all-over': 'All-over · zone totale',
-    'embroidery-front': 'Zone broderie',
-  };
-  return labels[placement] || placement;
-}
-
-function getDefaultPrintAreas(product: any) {
-  // Zones par défaut si l'API ne retourne pas les détails
-  return [
-    { placement: 'front', label: 'Devant', techniques: [{ id: 'dtg', name: 'Impression DTG' }], constraints: { width: 12, height: 16 } },
-    { placement: 'back', label: 'Dos', techniques: [{ id: 'dtg', name: 'Impression DTG' }], constraints: { width: 12, height: 16 } },
-  ];
 }
