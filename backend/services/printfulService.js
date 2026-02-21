@@ -53,17 +53,14 @@ class PrintfulService {
   }
 
   async getProductDetails(productId) {
-    // Printful API v2: produit d'un côté, variantes de l'autre
-    const [productData, variantsData] = await Promise.all([
-      this.request(`/catalog/products/${productId}`),
-      this.request(`/catalog/variants?product_id=${productId}&limit=100`),
-    ]);
-
-    const product = productData.result?.product || productData.result;
-
-    const rawVariants = Array.isArray(variantsData.result)
-      ? variantsData.result
-      : Object.values(variantsData.result || {});
+    // API v1: /products/{id} retourne le produit + ses variantes en une seule requête
+    const data = await this.request(`/products/${productId}`);
+    const product = data.result?.product || data.result;
+    
+    // Les variantes sont dans result.variants (tableau)
+    const rawVariants = Array.isArray(data.result?.variants)
+      ? data.result.variants
+      : [];
 
     const variants = rawVariants.map(v => ({
       id:         v.id,
